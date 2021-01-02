@@ -1,5 +1,5 @@
 /*!
- * vuex v3.6.2
+ * vuex v3.7.0-dev
  * (c) 2021 Evan You
  * @license MIT
  */
@@ -356,6 +356,138 @@ function makeAssertionMessage (path, key, type, value, expected) {
   return buf
 }
 
+var isMergeableObject = function isMergeableObject(value) {
+	return isNonNullObject(value)
+		&& !isSpecial(value)
+};
+
+function isNonNullObject(value) {
+	return !!value && typeof value === 'object'
+}
+
+function isSpecial(value) {
+	var stringValue = Object.prototype.toString.call(value);
+
+	return stringValue === '[object RegExp]'
+		|| stringValue === '[object Date]'
+		|| isReactElement(value)
+}
+
+// see https://github.com/facebook/react/blob/b5ac963fb791d1298e7f396236383bc955f916c1/src/isomorphic/classic/element/ReactElement.js#L21-L25
+var canUseSymbol = typeof Symbol === 'function' && Symbol.for;
+var REACT_ELEMENT_TYPE = canUseSymbol ? Symbol.for('react.element') : 0xeac7;
+
+function isReactElement(value) {
+	return value.$$typeof === REACT_ELEMENT_TYPE
+}
+
+function emptyTarget(val) {
+	return Array.isArray(val) ? [] : {}
+}
+
+function cloneUnlessOtherwiseSpecified(value, options) {
+	return (options.clone !== false && options.isMergeableObject(value))
+		? deepmerge(emptyTarget(value), value, options)
+		: value
+}
+
+function defaultArrayMerge(target, source, options) {
+	return target.concat(source).map(function(element) {
+		return cloneUnlessOtherwiseSpecified(element, options)
+	})
+}
+
+function getMergeFunction(key, options) {
+	if (!options.customMerge) {
+		return deepmerge
+	}
+	var customMerge = options.customMerge(key);
+	return typeof customMerge === 'function' ? customMerge : deepmerge
+}
+
+function getEnumerableOwnPropertySymbols(target) {
+	return Object.getOwnPropertySymbols
+		? Object.getOwnPropertySymbols(target).filter(function(symbol) {
+			return target.propertyIsEnumerable(symbol)
+		})
+		: []
+}
+
+function getKeys(target) {
+	return Object.keys(target).concat(getEnumerableOwnPropertySymbols(target))
+}
+
+function propertyIsOnObject(object, property) {
+	try {
+		return property in object
+	} catch(_) {
+		return false
+	}
+}
+
+// Protects from prototype poisoning and unexpected merging up the prototype chain.
+function propertyIsUnsafe(target, key) {
+	return propertyIsOnObject(target, key) // Properties are safe to merge if they don't exist in the target yet,
+		&& !(Object.hasOwnProperty.call(target, key) // unsafe if they exist up the prototype chain,
+			&& Object.propertyIsEnumerable.call(target, key)) // and also unsafe if they're nonenumerable.
+}
+
+function mergeObject(target, source, options) {
+	var destination = {};
+	if (options.isMergeableObject(target)) {
+		getKeys(target).forEach(function(key) {
+			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+		});
+	}
+	getKeys(source).forEach(function(key) {
+		if (propertyIsUnsafe(target, key)) {
+			return
+		}
+
+		if (propertyIsOnObject(target, key) && options.isMergeableObject(source[key])) {
+			destination[key] = getMergeFunction(key, options)(target[key], source[key], options);
+		} else {
+			destination[key] = cloneUnlessOtherwiseSpecified(source[key], options);
+		}
+	});
+	return destination
+}
+
+function deepmerge(target, source, options) {
+	options = options || {};
+	options.arrayMerge = options.arrayMerge || defaultArrayMerge;
+	options.isMergeableObject = options.isMergeableObject || isMergeableObject;
+	// cloneUnlessOtherwiseSpecified is added to `options` so that custom arrayMerge()
+	// implementations can use it. The caller may not replace it.
+	options.cloneUnlessOtherwiseSpecified = cloneUnlessOtherwiseSpecified;
+
+	var sourceIsArray = Array.isArray(source);
+	var targetIsArray = Array.isArray(target);
+	var sourceAndTargetTypesMatch = sourceIsArray === targetIsArray;
+
+	if (!sourceAndTargetTypesMatch) {
+		return cloneUnlessOtherwiseSpecified(source, options)
+	} else if (sourceIsArray) {
+		return options.arrayMerge(target, source, options)
+	} else {
+		return mergeObject(target, source, options)
+	}
+}
+
+deepmerge.all = function deepmergeAll(array, options) {
+	if (!Array.isArray(array)) {
+		throw new Error('first argument should be an array')
+	}
+
+	return array.reduce(function(prev, next) {
+		return deepmerge(prev, next, options)
+	}, {})
+};
+
+var deepmerge_1 = deepmerge;
+
+var cjs = deepmerge_1;
+
 let Vue; // bind on install
 
 class Store {
@@ -562,7 +694,7 @@ class Store {
     }
 
     this._modules.register(path, rawModule);
-    installModule(this, this.state, path, this._modules.get(path), options.preserveState);
+    installModule(this, this.state, path, this._modules.get(path), options.preserveState, options.preserveStateType);
     // reset store to update getters...
     resetStoreVM(this, this.state);
   }
@@ -681,7 +813,7 @@ function resetStoreVM (store, state, hot) {
   }
 }
 
-function installModule (store, rootState, path, module, hot) {
+function installModule (store, rootState, path, module, preserveState, preserveStateType = 'always') {
   const isRoot = !path.length;
   const namespace = store._modules.getNamespace(path);
 
@@ -694,9 +826,15 @@ function installModule (store, rootState, path, module, hot) {
   }
 
   // set state
-  if (!isRoot && !hot) {
-    const parentState = getNestedState(rootState, path.slice(0, -1));
-    const moduleName = path[path.length - 1];
+  const parentState = getNestedState(rootState, path.slice(0, -1));
+  const moduleName = path[path.length - 1];
+  const moduleStateExists = moduleName && moduleName in parentState;
+  if (!isRoot && (
+    !preserveState ||
+    (preserveStateType === 'existing' && !moduleStateExists) ||
+    (preserveStateType === 'mergeReplaceArrays' && !moduleStateExists) ||
+    (preserveStateType === 'mergeConcatArrays' && !moduleStateExists)
+  )) {
     store._withCommit(() => {
       {
         if (moduleName in parentState) {
@@ -705,7 +843,25 @@ function installModule (store, rootState, path, module, hot) {
           );
         }
       }
+
       Vue.set(parentState, moduleName, module.state);
+    });
+  }
+
+  // merge stored state with default state, replace arrays
+  if (!isRoot && preserveState && preserveStateType === 'mergeReplaceArrays' && moduleStateExists) {
+    const moduleOriginalState = parentState[moduleName];
+
+    store._withCommit(() => {
+      Vue.set(parentState, moduleName, cjs(module.state, moduleOriginalState, { arrayMerge: (target, source, options) => source }));
+    });
+  }
+
+  // merge stored state with default state, concat arrays
+  if (!isRoot && preserveState && preserveStateType === 'mergeConcatArrays' && moduleStateExists) {
+    const moduleOriginalState = parentState[moduleName];
+    store._withCommit(() => {
+      Vue.set(parentState, moduleName, cjs(module.state, moduleOriginalState, { arrayMerge: (target, source, options) => target.concat(...source) }));
     });
   }
 
@@ -728,7 +884,7 @@ function installModule (store, rootState, path, module, hot) {
   });
 
   module.forEachChild((child, key) => {
-    installModule(store, rootState, path.concat(key), child, hot);
+    installModule(store, rootState, path.concat(key), child, preserveState);
   });
 }
 
@@ -1187,7 +1343,7 @@ function pad (num, maxLength) {
 var index = {
   Store,
   install,
-  version: '3.6.2',
+  version: '3.7.0-dev',
   mapState,
   mapMutations,
   mapGetters,

@@ -1,5 +1,5 @@
 /*!
- * vuex v3.6.2
+ * vuex v3.7.0-dev
  * (c) 2021 Evan You
  * @license MIT
  */
