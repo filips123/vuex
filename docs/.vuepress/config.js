@@ -45,10 +45,10 @@ module.exports = {
   serviceWorker: true,
   theme: '@vuepress/vue',
   themeConfig: {
-    algolia: {
-      apiKey: '97f135e4b5f5487fb53f0f2dae8db59d',
-      indexName: 'vuex',
-    },
+    // algolia: {
+    //   apiKey: '97f135e4b5f5487fb53f0f2dae8db59d',
+    //   indexName: 'vuex',
+    // },
     repo: 'vuejs/vuex',
     docsDir: 'docs',
     locales: {
@@ -63,7 +63,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/' }
             ]
           }
         ],
@@ -113,7 +113,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/zh/' }
             ]
           }
         ],
@@ -163,7 +163,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/ja/' }
             ]
           }
         ],
@@ -213,7 +213,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/' }
             ]
           }
         ],
@@ -263,7 +263,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/' }
             ]
           }
         ],
@@ -313,7 +313,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/ptbr/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/ptbr/' }
             ]
           }
         ],
@@ -363,7 +363,7 @@ module.exports = {
           {
             text: 'v3.x',
             items: [
-              { text: 'v4.x', link: 'https://next.vuex.vuejs.org/' }
+              { text: 'v4.x', link: 'https://vuex.vuejs.org/' }
             ]
           }
         ],
